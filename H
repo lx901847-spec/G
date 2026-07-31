@@ -1,0 +1,280 @@
+-- ===================================================
+-- Full UI Panel + Script Integration
+-- ===================================================
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local CoreGui = game:GetService("CoreGui")
+
+-- สร้าง ScreenGui ป้องกันการรบกวน UI หลักของเกม
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CustomControlPanelUI"
+ScreenGui.ResetOnSpawn = false
+
+-- ป้องกันเซิร์ฟเวอร์ดักจับ UI สกปรก
+if gethui then
+    ScreenGui.Parent = gethui()
+elseif syn and syn.protect_gui then
+    syn.protect_gui(ScreenGui)
+    ScreenGui.Parent = CoreGui
+else
+    ScreenGui.Parent = CoreGui
+end
+
+---------------------------------------------------
+-- 1. ฟังก์ชันสคริปต์ฟีเจอร์ (ช่องที่ 1: ล็อคหัว)
+---------------------------------------------------
+local function getClosestPlayer()
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+    local myCharacter = LocalPlayer.Character
+
+    if myCharacter and myCharacter:FindFirstChild("HumanoidRootPart") then
+        local myPos = myCharacter.HumanoidRootPart.Position
+
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                if humanoid and humanoid.Health > 0 then
+                    local targetPart = player.Character:FindFirstChild("Head") or player.Character.HumanoidRootPart
+                    local distance = (targetPart.Position - myPos).Magnitude
+
+                    if distance < shortestDistance then
+                        shortestDistance = distance
+                        closestPlayer = player
+                    end
+                end
+            end
+        end
+    end
+    return closestPlayer
+end
+
+local function executeLockHead()
+    local targetPlayer = getClosestPlayer()
+
+    if targetPlayer and targetPlayer.Character then
+        local targetPart = targetPlayer.Character:FindFirstChild("Head") or targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        
+        if targetPart then
+            local targetCFrame = targetPart.CFrame
+            local targetVector = targetPart.Position
+
+            local args = {
+                0,
+                0,
+                1,
+                0.8,
+                targetCFrame,
+                targetVector,
+                targetPart,
+                11,
+                workspace:GetServerTimeNow()
+            }
+
+            local clientRemotes = LocalPlayer:FindFirstChild("ClientRemotes")
+            if clientRemotes and clientRemotes:FindFirstChild("CheckShot") then
+                clientRemotes.CheckShot:FireServer(unpack(args))
+                print("[SUCCESS] ล็อคหัวยิงไปที่: " .. targetPlayer.Name)
+            else
+                warn("[ERROR] ไม่พบ RemoteEvent: CheckShot")
+            end
+        end
+    else
+        warn("[WARN] ไม่พบผู้เล่นใกล้เคียงในระยะ")
+    end
+end
+
+---------------------------------------------------
+-- 2. สร้าง UI Main Panel (สี่เหลี่ยมมุมโค้ง/โปร่งใส)
+---------------------------------------------------
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 520, 0, 360)
+MainFrame.Position = UDim2.new(0.5, -260, 0.5, -180)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+MainFrame.BackgroundTransparency = 0.25
+MainFrame.BorderSizePixel = 0
+MainFrame.ClipsDescendants = true
+MainFrame.Parent = ScreenGui
+
+local MainUICorner = Instance.new("UICorner")
+MainUICorner.CornerRadius = UDim.new(0, 16)
+MainUICorner.Parent = MainFrame
+
+local MainUIStroke = Instance.new("UIStroke")
+MainUIStroke.Color = Color3.fromRGB(255, 255, 255)
+MainUIStroke.Transparency = 0.85
+MainUIStroke.Thickness = 1
+MainUIStroke.Parent = MainFrame
+
+-- ส่วนหัว (Header สำหรับจับลาก)
+local HeaderFrame = Instance.new("Frame")
+HeaderFrame.Name = "HeaderFrame"
+HeaderFrame.Size = UDim2.new(1, 0, 0, 45)
+HeaderFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+HeaderFrame.BackgroundTransparency = 0.95
+HeaderFrame.BorderSizePixel = 0
+HeaderFrame.Parent = MainFrame
+
+-- ข้อความส่วนหัว (ข้อความเด่นลอย ลายเดิม)
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Name = "TitleLabel"
+TitleLabel.Size = UDim2.new(1, -60, 1, 0)
+TitleLabel.Position = UDim2.new(0, 16, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "CONTROL PANEL"
+TitleLabel.TextColor3 = Color3.fromRGB(0, 225, 255)
+TitleLabel.TextSize = 18
+TitleLabel.Font = Enum.Font.FredokaOne
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = HeaderFrame
+
+-- ปุ่มปิด UI (บล็อกสี่เหลี่ยมมุมโค้ง)
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Name = "CloseBtn"
+CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+CloseBtn.Position = UDim2.new(1, -38, 0, 7.5)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+CloseBtn.BackgroundTransparency = 0.3
+CloseBtn.Text = "✕"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextSize = 14
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Parent = HeaderFrame
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 8)
+CloseCorner.Parent = CloseBtn
+
+---------------------------------------------------
+-- 3. พื้นที่ใส่ช่องฟังก์ชั่น (2 ฝั่ง รวม 10 ช่อง + เลื่อนได้)
+---------------------------------------------------
+local ScrollContainer = Instance.new("ScrollingFrame")
+ScrollContainer.Name = "ScrollContainer"
+ScrollContainer.Size = UDim2.new(1, -20, 1, -60)
+ScrollContainer.Position = UDim2.new(0, 10, 0, 50)
+ScrollContainer.BackgroundTransparency = 1
+ScrollContainer.BorderSizePixel = 0
+ScrollContainer.ScrollBarThickness = 4
+ScrollContainer.ScrollBarImageColor3 = Color3.fromRGB(0, 225, 255)
+ScrollContainer.CanvasSize = UDim2.new(0, 0, 0, 320)
+ScrollContainer.Parent = MainFrame
+
+local UIGrid = Instance.new("UIGridLayout")
+UIGrid.CellSize = UDim2.new(0.48, 0, 0, 50)
+UIGrid.CellPadding = UDim2.new(0.03, 0, 0, 10)
+UIGrid.SortOrder = Enum.SortOrder.LayoutOrder
+UIGrid.Parent = ScrollContainer
+
+-- ปุ่มเปิดคืน เมื่อกดปิด UI ไป
+local ReopenBtn = Instance.new("TextButton")
+ReopenBtn.Name = "ReopenBtn"
+ReopenBtn.Size = UDim2.new(0, 140, 0, 40)
+ReopenBtn.Position = UDim2.new(1, -150, 1, -50)
+ReopenBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
+ReopenBtn.BackgroundTransparency = 0.2
+ReopenBtn.Text = "เปิด UI อีกครั้ง"
+ReopenBtn.TextColor3 = Color3.fromRGB(0, 225, 255)
+ReopenBtn.TextSize = 14
+ReopenBtn.Font = Enum.Font.Kanit
+ReopenBtn.Visible = false
+ReopenBtn.Parent = ScreenGui
+
+local ReopenCorner = Instance.new("UICorner")
+ReopenCorner.CornerRadius = UDim.new(0, 10)
+ReopenCorner.Parent = ReopenBtn
+
+---------------------------------------------------
+-- 4. ฟังก์ชั่นสร้างช่องกดทั้ง 10 ช่อง
+---------------------------------------------------
+local function createButtonCard(id, titleText, callback)
+    local ButtonCard = Instance.new("TextButton")
+    ButtonCard.Name = "Card_" .. tostring(id)
+    ButtonCard.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    ButtonCard.BackgroundTransparency = 0.92
+    ButtonCard.Text = ""
+    ButtonCard.Parent = ScrollContainer
+
+    local CardCorner = Instance.new("UICorner")
+    CardCorner.CornerRadius = UDim.new(0, 10)
+    CardCorner.Parent = ButtonCard
+
+    local CardStroke = Instance.new("UIStroke")
+    CardStroke.Color = Color3.fromRGB(255, 255, 255)
+    CardStroke.Transparency = 0.9
+    CardStroke.Parent = ButtonCard
+
+    local CardText = Instance.new("TextLabel")
+    CardText.Size = UDim2.new(1, -10, 1, 0)
+    CardText.Position = UDim2.new(0, 10, 0, 0)
+    CardText.BackgroundTransparency = 1
+    CardText.Text = titleText
+    CardText.TextColor3 = (id == 1) and Color3.fromRGB(0, 255, 180) or Color3.fromRGB(200, 200, 200)
+    CardText.TextSize = 13
+    CardText.Font = Enum.Font.Kanit
+    CardText.TextXAlignment = Enum.TextXAlignment.Left
+    CardText.Parent = ButtonCard
+
+    ButtonCard.MouseButton1Click:Connect(function()
+        if callback then
+            callback()
+        end
+    end)
+end
+
+-- ช่องที่ 1: ใส่ฟังก์ชันล็อคหัว
+createButtonCard(1, "1. ล็อคหัว (Click Fire)", function()
+    executeLockHead()
+end)
+
+-- ช่องที่ 2 - 10: ช่องสำรอง (สามารถนำฟังก์ชั่นอื่นมาใส่เพิ่มได้)
+for i = 2, 10 do
+    createButtonCard(i, i .. ". ช่องว่างใช้งาน", function()
+        print("กดใช้งานช่องที่: " .. i)
+    end)
+end
+
+---------------------------------------------------
+-- 5. ระบบควบคุม (ปิด-เปิด UI & ลากย้ายหน้าต่าง)
+---------------------------------------------------
+CloseBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+    ReopenBtn.Visible = true
+end)
+
+ReopenBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = true
+    ReopenBtn.Visible = false
+end)
+
+-- ระบบลาก UI อิสระ (Drag & Drop System)
+local UserInputService = game:GetService("UserInputService")
+local dragging, dragInput, dragStart, startPos
+
+HeaderFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+HeaderFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
